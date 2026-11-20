@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-No additional Linux changes recorded yet.
+- Rust: a fixed bar under Appearance always shows the selected character, what is on the desktop, and its Apply button, instead of Apply sitting below the scrolled character grid.
+- Rust: the status message and the activity toggle share one row, leaving more room for page content.
+- Rust: the activity log keeps a running history of timed, readable lines (for example `09:06 · Integrity verified…`) instead of raw worker JSON; raw output is added only when a failure has no readable error.
+- Rust: snapshots are listed by readable dates (`Today 09:06`, `Mon 26 Oct, 16:53`) with the raw name as a tooltip; search matches either. The backup format is unchanged.
 
 ## v2026.10.22 — 2026-10-22
 

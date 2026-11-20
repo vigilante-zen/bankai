@@ -294,6 +294,10 @@ public:
   QPushButton *inspectButton;
   QLabel *portraitPreview, *mangaPreview, *portraitCaption;
   QString savedDesktop;
+  // Fixed bar under the Appearance page: what is selected, what is applied, and Apply.
+  QFrame *applyBar = nullptr;
+  QLabel *applyStatus = nullptr;
+  QPushButton *applyButton = nullptr;
   QPushButton *verifyButton, *restoreButton, *protectButton, *cleanupButton,
       *logButton;
   QPlainTextEdit *log;
@@ -411,19 +415,48 @@ public:
     pages->addWidget(backupsPage());
     pages->addWidget(toolsPage());
     right->addWidget(pages, 1);
+    applyBar = new QFrame;
+    applyBar->setObjectName("apply-bar");
+    auto *applyRow = new QHBoxLayout(applyBar);
+    applyRow->setContentsMargins(16, 10, 10, 10);
+    applyRow->setSpacing(10);
+    applyStatus = label("", "apply-status");
+    applyStatus->setObjectName("apply-status");
+    applyStatus->setAccessibleName("Selected and applied character");
+    applyStatus->setWordWrap(true);
+    applyRow->addWidget(applyStatus, 1);
+    auto *openWallpaper = button("Open wallpaper", [this] {
+      openFile(wallpapers + "/" + preset(selected).value("image").toString());
+    });
+    openWallpaper->setObjectName("open-wallpaper");
+    applyRow->addWidget(openWallpaper);
+    applyButton = button("Apply", [this] {
+      startTask({{"op", "apply"}, {"preset", selected}}, "Applying preset…");
+    }, true);
+    applyButton->setAccessibleName("Apply selected character");
+    applyButton->setAccessibleDescription(
+        "Apply the selected character to the desktop. A snapshot is saved first.");
+    applyRow->addWidget(applyButton);
+    right->addWidget(applyBar);
     notice =
         label("Choose a character to preview. Click Apply when you are ready.", "notice");
     notice->setAccessibleName("Bankai status");
+    notice->setWordWrap(true);
     if (!customPresetError.isEmpty())
       notice->setText("Saved presets could not be loaded: " + customPresetError);
-    right->addWidget(notice);
     logButton = new QPushButton("Show activity");
     logButton->setAccessibleDescription("Show or hide Bankai's action and error log.");
     logButton->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
-    right->addWidget(logButton);
+    auto *statusRow = new QHBoxLayout;
+    statusRow->setSpacing(10);
+    statusRow->addWidget(notice, 1);
+    statusRow->addWidget(logButton, 0, Qt::AlignVCenter);
+    right->addLayout(statusRow);
     log = new QPlainTextEdit;
+    log->setObjectName("activity-log");
     log->setAccessibleName("Bankai activity log");
     log->setReadOnly(true);
+    log->setMaximumBlockCount(300);
     log->setMaximumHeight(110);
     log->hide();
     right->addWidget(log);
@@ -434,6 +467,7 @@ public:
     layout->addWidget(content, 1);
     connect(navigation, &QListWidget::currentRowChanged, this, [this](int row) {
       pages->setCurrentIndex(row);
+      applyBar->setVisible(row == 0);
       if (row == 1) refreshSnapshots();
     });
     navigation->setCurrentRow(0);
@@ -698,6 +732,26 @@ public:
     loadArtworkPreview(p, art->select(p));
     previewNote->setText("Previewing " + p.value("title").toString() +
                          ". Applying saves a snapshot first.");
+    updateApplyBar();
+  }
+  QString presetTitle(const QString &id) const {
+    for (auto value : presets)
+      if (value.toObject().value("id").toString() == id)
+        return value.toObject().value("title").toString();
+    return id;
+  }
+  void updateApplyBar() {
+    if (!applyStatus || !applyButton)
+      return;
+    const auto chosen = presetTitle(selected);
+    const auto current = savedDesktop.isEmpty() ? QString("—") : presetTitle(savedDesktop);
+    const bool same = !savedDesktop.isEmpty() && selected == savedDesktop;
+    applyStatus->setText(
+        same ? QString("<b>%1</b> is on your desktop.").arg(chosen.toHtmlEscaped())
+             : QString("Selected <b>%1</b> · on your desktop: %2")
+                   .arg(chosen.toHtmlEscaped(), current.toHtmlEscaped()));
+    applyButton->setText(same ? "Re-apply " + chosen : "Apply " + chosen);
+    applyButton->setToolTip(same ? "Apply " + chosen + " again" : "Apply " + chosen + " to the desktop");
   }
   void refreshCustomPresets() {
     if (!customPresetChoice) return;
@@ -827,19 +881,6 @@ public:
             [this] { layoutPresetCards(); });
     previewNote = label("", "muted");
     layout->addWidget(previewNote);
-    auto *actions = new QHBoxLayout;
-    actions->addWidget(button(
-        "Apply preset",
-        [this] {
-          startTask({{"op", "apply"}, {"preset", selected}},
-                    "Applying preset…");
-        },
-        true));
-    actions->addWidget(button("Open wallpaper", [this] {
-      openFile(wallpapers + "/" + preset(selected).value("image").toString());
-    }));
-    actions->addStretch();
-    layout->addLayout(actions);
     auto *savedRow=new QVBoxLayout;
     customPresetChoice=new QComboBox;
     customPresetChoice->setObjectName("custom-preset-choice");
@@ -904,7 +945,7 @@ public:
     snapshotFilter = new QSortFilterProxyModel(this);
     snapshotFilter->setSourceModel(snapshotModel);
     snapshotFilter->setFilterCaseSensitivity(Qt::CaseInsensitive);
-    snapshotFilter->setFilterRole(Qt::DisplayRole);
+    snapshotFilter->setFilterRole(Qt::UserRole + 1);
     snapshots->setModel(snapshotFilter);
     connect(snapshotSearch, &QLineEdit::textChanged, this,
             [this](const QString &query) {
@@ -1505,6 +1546,7 @@ public:
       auto id = status.value("current").toString();
       bool desktopChanged = savedDesktop != id;
       savedDesktop = id;
+      updateApplyBar();
       if (artworkChanged || desktopChanged)
         updatePortraitPreview();
       auto p = preset(id);
@@ -1570,14 +1612,16 @@ public:
       rows[name] = row;
       total += row.value("bytes").toDouble();
       protectedCount += row.value("protected").toBool();
-      auto title = name + " · " +
+      auto title = snapshotLabel(name) + " · " +
                    (row.value("eligible").toBool()
                         ? sizeText(row.value("bytes").toDouble())
                         : "needs review");
       if (row.value("protected").toBool())
-        title += row.value("baseline").toBool() ? " · Baseline" : " · ★ Protected";
+        title += row.value("baseline").toBool() ? " · Original baseline" : " · ★ Protected";
       auto *item = new QStandardItem(title);
       item->setData(name, Qt::UserRole);
+      item->setData(title + " " + name, Qt::UserRole + 1);  // search matches label or raw name
+      item->setToolTip(name);
       snapshotModel->appendRow(item);
     }
     snapshotFilter->invalidate();
@@ -1646,6 +1690,21 @@ public:
                         [this, code, status](const QJsonObject &reply) {
                           finishSnapshotScanResponse(reply, code, status);
                         });
+  }
+  // Snapshot names are YYYYMMDD-HHMMSS-micro; show them as a readable local date.
+  static QString snapshotLabel(const QString &name, const QDate &today = QDate::currentDate()) {
+    const auto stamp = QDateTime::fromString(name.left(15), "yyyyMMdd-HHmmss");
+    if (!stamp.isValid())
+      return name;
+    const QDate date = stamp.date();
+    const QString time = stamp.toString("HH:mm");
+    if (date == today)
+      return "Today " + time;
+    if (date == today.addDays(-1))
+      return "Yesterday " + time;
+    QLocale locale(QLocale::English);
+    return locale.toString(date, date.year() == today.year() ? "ddd d MMM" : "ddd d MMM yyyy") +
+           ", " + time;
   }
   void refreshSnapshots() {
     watchBackupDirectories();
@@ -1720,7 +1779,7 @@ public:
     if (name.isEmpty())
       return;
     QMessageBox dialog(QMessageBox::Warning, "Restore snapshot?",
-                       "Restore desktop and terminal from " + name + "?",
+                       "Restore desktop and terminal from " + snapshotLabel(name) + "?",
                        QMessageBox::NoButton, this);
     dialog.setInformativeText(
         "Your current settings will be backed up first. Log out and back in "
@@ -1811,13 +1870,13 @@ public:
     if (process)
       return;
     notice->setText(progress);
+    logActivity(progress);
     portraitChoice->setEnabled(false);
     portraitChooser->setEnabled(false);
     portraitArt->setEnabled(false);
     matchDesktop->setEnabled(false);
     output.clear();
     outputExceededLimit = false;
-    log->clear();
     for (auto *b : buttons)
       b->setEnabled(false);
     for (auto *c : cards)
@@ -1855,8 +1914,13 @@ public:
                 notice->setText(
                     good ? result.value("message").toString("Action completed.")
                          : error);
-                log->setPlainText(logText);
                 if (!good) {
+                  // Raw worker output only when it explains more than the error line.
+                  const auto details = logText.trimmed();
+                  logActivity("Failed: " + error +
+                              (reply.isEmpty() && !details.isEmpty()
+                                   ? "\n    Details: " + details.right(2000)
+                                   : QString()));
                   log->show();
                   logButton->setText("Hide activity");
                 }
@@ -1880,6 +1944,8 @@ public:
                   refreshCustomPresets();
                   notice->setText("Saved preset deleted.");
                 }
+                if (good)
+                  logActivity(notice->text());
                 if (tray && tray->isVisible() && !isVisible())
                   tray->showMessage("Bankai Rust", notice->text(),
                                     good ? QSystemTrayIcon::Information
@@ -1901,6 +1967,11 @@ public:
     worker->write(QJsonDocument(request).toJson(QJsonDocument::Compact));
     worker->closeWriteChannel();
     slowTimer.start();
+  }
+  void logActivity(const QString &line) {
+    if (!log || line.trimmed().isEmpty())
+      return;
+    log->appendPlainText(QTime::currentTime().toString("HH:mm") + " · " + line);
   }
   void finishTask(QProcess *worker) {
     if (process != worker)
@@ -2833,6 +2904,39 @@ static int smoke(Window &window, const QString &directory) {
   qApp->processEvents();
   if (window.logButton->width() < window.logButton->sizeHint().width())
     throw std::runtime_error("Activity action text is clipped at the configured font size");
+  // The Apply bar sits outside the page scroll, so Apply is always visible on Appearance.
+  {
+    const auto applyTitle = window.presetTitle(window.selected);
+    if (!window.applyBar->isVisible() || !window.applyButton->isVisible() ||
+        window.applyButton->text() != (window.selected == window.savedDesktop ? "Re-apply " : "Apply ") + applyTitle ||
+        !window.applyStatus->text().contains(applyTitle.toHtmlEscaped()) ||
+        window.pages->widget(0)->isAncestorOf(window.applyButton))
+      throw std::runtime_error("Apply bar is missing, hidden in the page scroll, or out of date");
+    QString other;
+    for (auto value : window.presets)
+      if (value.toObject().value("id").toString() != window.savedDesktop) {
+        other = value.toObject().value("id").toString();
+        break;
+      }
+    window.selectPreset(other);
+    if (window.applyButton->text() != "Apply " + window.presetTitle(other) ||
+        !window.applyStatus->text().contains("on your desktop"))
+      throw std::runtime_error("Apply bar does not show the selected and applied characters");
+    window.selectPreset(initial.toString());
+    window.navigation->setCurrentRow(1);
+    qApp->processEvents();
+    if (window.applyBar->isVisible())
+      throw std::runtime_error("Apply bar shows outside the Appearance page");
+    window.navigation->setCurrentRow(0);
+    qApp->processEvents();
+    const QDate today(2026, 11, 20);
+    if (Window::snapshotLabel("20261120-085602-364253", today) != "Today 08:56" ||
+        Window::snapshotLabel("20261119-213000-000001", today) != "Yesterday 21:30" ||
+        Window::snapshotLabel("20261026-165302-437883", today) != "Mon 26 Oct, 16:53" ||
+        Window::snapshotLabel("20251231-010203-000000", today) != "Wed 31 Dec 2025, 01:02" ||
+        Window::snapshotLabel("not-a-date", today) != "not-a-date")
+      throw std::runtime_error("Snapshot dates are not shown as readable labels");
+  }
   if (window.navigation->horizontalScrollBar()->maximum() > 0)
     throw std::runtime_error("Sidebar navigation labels do not fit without horizontal scrolling");
   auto *presetSearch = window.findChild<QLineEdit *>("preset-search");
@@ -3143,6 +3247,25 @@ static int smoke(Window &window, const QString &directory) {
     previewFailure = "Restore preview did not open";
   if (!previewFailure.isEmpty())
     throw std::runtime_error(previewFailure.toStdString());
+  {
+    // The activity log reads as timed sentences, never raw worker JSON.
+    const auto activity = window.log->toPlainText();
+    if (activity.contains("{\"ok\"") || !activity.contains("Verifying snapshot contents…") ||
+        !QRegularExpression("^\\d\\d:\\d\\d · ", QRegularExpression::MultilineOption).match(activity).hasMatch())
+      throw std::runtime_error("Activity log is not readable: " + activity.left(200).toStdString());
+    const auto shown = window.snapshots->currentText();
+    if (!shown.isEmpty() && QRegularExpression("^\\d{8}-\\d{6}").match(shown).hasMatch())
+      throw std::runtime_error("Snapshot list still shows raw snapshot names");
+    const auto raw = window.snapshots->currentData().toString();
+    if (!raw.isEmpty()) {
+      window.snapshotSearch->setText(raw);
+      qApp->processEvents();
+      if (window.snapshots->currentData().toString() != raw)
+        throw std::runtime_error("Snapshot search no longer matches raw snapshot names");
+      window.snapshotSearch->clear();
+      qApp->processEvents();
+    }
+  }
   window.grab().save(directory + "/rust-backups.png");
   window.trayMenu->ensurePolished();
   window.trayMenu->adjustSize();
