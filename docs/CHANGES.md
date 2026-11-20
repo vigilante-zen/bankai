@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Rust: page titles match the sidebar (Appearance, Backups & restore, Terminal & tools); the flavor lines move into the subtitles.
+- Rust: Create snapshot is a neutral button; red is kept for applying changes.
+- Rust: a finished action's message no longer follows you to other pages; each page shows its own hint, and results stay in the activity log.
+- Rust: Appearance options are grouped into Wallpaper, Accent color, Login screen and Shuffle at login, with the accent field, picker, a live swatch and a reset button on one row.
+- Rust: the search field no longer starts focused (and outlined) when the window opens.
+- Rust smoke test: its test-only thumbnail button is hidden after its check, so it no longer appears in screenshots.
 - Rust: the Appearance preview shows the selected wallpaper filling a proportional panel (it was drawn as a small, darkened strip), with readable shadowed title text.
 - Rust: a color palette under the preview shows the window, panel, button, selection, text and accent colors applying that character sets, read from the same color scheme and accent override that Apply uses. Hover a chip for its role.
 - Rust: clicking the sidebar, buttons or character cards no longer leaves a pink focus border, and selecting a page no longer shifts its label; Tab still shows the high-contrast focus border.

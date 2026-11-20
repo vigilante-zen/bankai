@@ -560,6 +560,10 @@ public:
     connect(navigation, &QListWidget::currentRowChanged, this, [this](int row) {
       pages->setCurrentIndex(row);
       applyBar->setVisible(row == 0);
+      // A finished action's message belongs to the page it ran on (it stays in the
+      // activity log). A running action keeps its progress message.
+      if (!process)
+        notice->setText(pageHint(row));
       if (row == 1) refreshSnapshots();
     });
     navigation->setCurrentRow(0);
@@ -836,6 +840,15 @@ public:
           widget->focusPolicy() == Qt::StrongFocus)
         widget->setFocusPolicy(Qt::TabFocus);
   }
+  QString pageHint(int row) const {
+    if (row == 0)
+      return customPresetError.isEmpty()
+                 ? "Choose a character to preview. Click Apply when you are ready."
+                 : "Saved presets could not be loaded: " + customPresetError;
+    if (row == 1)
+      return "Create a snapshot before big changes. Restores are checked before anything changes.";
+    return "Choose terminal artwork and click Save terminal artwork. New tabs use it.";
+  }
   void updatePalette(const QString &id) {
     if (!palette)
       return;
@@ -936,11 +949,11 @@ public:
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(13);
     auto *header = new QHBoxLayout;
-    header->addWidget(label("Make it yours", "heading")); header->addStretch();
+    header->addWidget(label("Appearance", "heading")); header->addStretch();
     header->addWidget(button("Appearance options", [this] { appearanceOptions(); })); layout->addLayout(header);
     layout->addWidget(
-        label("Matching wallpaper, lock screen and desktop colors. "
-              "Eighteen characters and forms with color and manga wallpapers.",
+        label("Make it yours: matching wallpaper, lock screen and desktop colors "
+              "for eighteen characters and forms.",
               "muted"));
     art = new Artwork;
     layout->addWidget(art);
@@ -1040,13 +1053,15 @@ public:
     auto *layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(16);
-    layout->addWidget(label("Keep a way back", "heading"));
-    layout->addWidget(label("Compatible snapshots, verified restores, and "
-                            "protection for your favorites.",
+    layout->addWidget(label("Backups & restore", "heading"));
+    layout->addWidget(label("Keep a way back: snapshots of your desktop and terminal "
+                            "settings, checked before every restore.",
                             "muted"));
     auto *createSnapshot = button("Create snapshot", [this] {
       startTask({{"op", "backup"}}, "Creating snapshot…");
-    }, true);
+    });
+    createSnapshot->setAccessibleDescription(
+        "Save a copy of the current desktop and terminal settings. Nothing is changed.");
     createSnapshot->setIcon(svgIcon(bootstrap.value("backups_svg").toString().toUtf8()));
     layout->addWidget(createSnapshot);
     layout->addSpacing(8);
@@ -1155,9 +1170,9 @@ public:
     auto *layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(13);
-    layout->addWidget(label("At your command", "heading"));
+    layout->addWidget(label("Terminal & tools", "heading"));
     layout->addWidget(label(
-        "Your existing portraits, favorites, greetings and monitor.", "muted"));
+        "At your command: terminal artwork, greetings and the system monitor.", "muted"));
     layout->addWidget(label("TERMINAL ARTWORK", "eyebrow"));
     portraitChoice = new QComboBox(page);
     portraitChoice->setAccessibleName("Terminal character selection");
@@ -2148,26 +2163,59 @@ public:
       return;
     }
     QDialog dialog(this); dialog.setObjectName("appearance-options-dialog"); dialog.setWindowTitle("Appearance options");
-    auto *layout = new QVBoxLayout(&dialog); auto *form = new QFormLayout;
+    // Grouped into sections: wallpaper style, accent, login screen, login shuffle.
+    auto *layout = new QVBoxLayout(&dialog);
+    layout->setSpacing(8);
+    auto section = [layout](const QString &title, const QString &hint = {}) {
+      layout->addSpacing(6);
+      layout->addWidget(label(title, "eyebrow"));
+      if (!hint.isEmpty()) layout->addWidget(label(hint, "muted"));
+    };
+    section("WALLPAPER");
+    auto *form = new QFormLayout;
     layout->addLayout(form);
     auto *edition = new QComboBox; edition->addItem("Color", "color"); edition->addItem("Manga", "manga");
     edition->setCurrentIndex(qMax(0, edition->findData(value.value("edition").toString())));
     form->addRow("Desktop and lock screen", edition);
-    auto *accent = new QLineEdit(value.value("accent").toString()); accent->setPlaceholderText("Use character accent");
-    form->addRow("Accent override (#RRGGBB)", accent);
-    auto *color = new QPushButton("Choose accent color"); layout->addWidget(color);
+    section("ACCENT COLOR", "Leave empty to use each character's own accent.");
+    auto *accentRow = new QHBoxLayout;
+    auto *accentSwatch = new QLabel;
+    accentSwatch->setObjectName("accent-swatch");
+    accentSwatch->setFixedSize(34, 34);
+    accentSwatch->setAccessibleName("Accent color preview");
+    auto *accent = new QLineEdit(value.value("accent").toString()); accent->setPlaceholderText("#RRGGBB");
+    accent->setAccessibleName("Accent override, #RRGGBB");
+    auto *color = new QPushButton("Pick…");
+    color->setAccessibleDescription("Choose the accent override with a color picker.");
+    auto *clearAccent = new QPushButton("Use character accent");
+    accentRow->addWidget(accentSwatch); accentRow->addWidget(accent, 1); accentRow->addWidget(color); accentRow->addWidget(clearAccent);
+    layout->addLayout(accentRow);
+    auto updateSwatch = [this, accent, accentSwatch] {
+      const QColor shown(accent->text().trimmed().isEmpty() ? preset(selected).value("accent").toString() : accent->text().trimmed());
+      accentSwatch->setStyleSheet(shown.isValid()
+          ? QString("background: %1; border: 1px solid #33415a; border-radius: 8px;").arg(shown.name())
+          : QString("background: transparent; border: 1px dashed #e96b75; border-radius: 8px;"));
+      accentSwatch->setToolTip(shown.isValid() ? shown.name() : "Not a valid #RRGGBB color");
+    };
+    updateSwatch();
+    connect(accent, &QLineEdit::textChanged, &dialog, updateSwatch);
+    connect(clearAccent, &QPushButton::clicked, &dialog, [accent] { accent->clear(); });
     connect(color, &QPushButton::clicked, &dialog, [&, accent] {
       auto chosen = QColorDialog::getColor(QColor(accent->text().isEmpty() ? preset(selected).value("accent").toString() : accent->text()), &dialog);
       if (chosen.isValid()) accent->setText(chosen.name());
     });
+    section("LOGIN SCREEN", "Takes effect after the one-time login screen setup.");
+    auto *loginForm = new QFormLayout;
+    layout->addLayout(loginForm);
     auto *login = new QComboBox; login->addItem("Follow background character", "follow");
     for (auto row : presets) { auto p=row.toObject(); login->addItem(p.value("title").toString()+" (fixed manga scene)",p.value("id")); }
     login->setCurrentIndex(qMax(0, login->findData(value.value("login").toString())));
-    form->addRow("Login scene", login);
+    loginForm->addRow("Login scene", login);
+    section("SHUFFLE AT LOGIN", "Enable Bankai at login in only one edition for this to work.");
     auto *shuffle = new QCheckBox("Choose a different background when Bankai starts at login");
     shuffle->setChecked(value.value("shuffle_login").toBool()); layout->addWidget(shuffle);
     auto *poolHeading = new QHBoxLayout;
-    poolHeading->addWidget(new QLabel("Shuffle pool (choose at least one):"));
+    poolHeading->addWidget(new QLabel("Characters to shuffle (choose at least one):"));
     auto *poolCount = label("", "muted");
     poolCount->setObjectName("shuffle-pool-count");
     poolHeading->addStretch(); poolHeading->addWidget(poolCount);
@@ -2197,8 +2245,9 @@ public:
       item->setData(Qt::UserRole,p.value("id")); item->setFlags(item->flags()|Qt::ItemIsUserCheckable);
       item->setCheckState(value.value("pool").toArray().contains(p.value("id")) ? Qt::Checked : Qt::Unchecked);
     }
-    auto *note = new QLabel("Save options, then Apply a background for wallpaper and accent changes. Login choice syncs after one-time system setup. Enable only one Bankai edition at login for shuffle.");
-    note->setWordWrap(true); layout->addWidget(note);
+    layout->addSpacing(6);
+    auto *note = label("Save, then Apply a character to see wallpaper and accent changes.", "muted");
+    layout->addWidget(note);
     auto *reset = new QPushButton("Reset to defaults");
     reset->setObjectName("reset-appearance");
     layout->addWidget(reset);
@@ -2359,6 +2408,17 @@ public:
   }
 
 protected:
+  bool initialFocusSet = false;
+  void showEvent(QShowEvent *event) override {
+    QMainWindow::showEvent(event);
+    if (initialFocusSet)
+      return;
+    initialFocusSet = true;
+    // Start with focus on the page, not the search field, so nothing looks active until
+    // the user clicks, presses Tab, or presses / to search.
+    centralWidget()->setFocusPolicy(Qt::ClickFocus);
+    centralWidget()->setFocus(Qt::OtherFocusReason);
+  }
   void closeEvent(QCloseEvent *event) override {
     if (process) {
       notice->setText("Let the current action finish before closing Bankai.");
@@ -2834,6 +2894,7 @@ static int smoke(Window &window, const QString &directory) {
            .contains("thumbnail unavailable"))
     throw std::runtime_error(
         "Unavailable preset artwork was not shown to users and assistive technology");
+  missingThumbnailCard.hide();  // test-only widget; keep it out of the screenshots
   QPushButton missingPortraitCard;
   missingPortraitCard.setAccessibleDescription("Choose Missing Terminal");
   QLabel missingPortraitLabel(&missingPortraitCard);
@@ -3058,9 +3119,17 @@ static int smoke(Window &window, const QString &directory) {
         window.applyButton->focusPolicy() != Qt::TabFocus ||
         window.presetSearch->focusPolicy() != Qt::StrongFocus)
       throw std::runtime_error("Clicking navigation or buttons would leave a focus border");
+    if (window.presetSearch->hasFocus())
+      throw std::runtime_error("Search field takes focus when the window opens");
     window.selectPreset(initial.toString());
+    window.notice->setText("Saved preset deleted.");
     window.navigation->setCurrentRow(1);
     qApp->processEvents();
+    if (window.notice->text() == "Saved preset deleted." || window.notice->text() != window.pageHint(1))
+      throw std::runtime_error("A finished action's message followed the user to another page");
+    for (auto *b : window.findChildren<QPushButton *>())
+      if (b->text() == "Create snapshot" && b->objectName() == "primary")
+        throw std::runtime_error("Create snapshot uses the red primary style");
     if (window.applyBar->isVisible())
       throw std::runtime_error("Apply bar shows outside the Appearance page");
     window.navigation->setCurrentRow(0);
