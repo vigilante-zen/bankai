@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rust: the Appearance preview shows the selected wallpaper filling a proportional panel (it was drawn as a small, darkened strip), with readable shadowed title text.
+- Rust: a color palette under the preview shows the window, panel, button, selection, text and accent colors applying that character sets, read from the same color scheme and accent override that Apply uses. Hover a chip for its role.
+- Rust: clicking the sidebar, buttons or character cards no longer leaves a pink focus border, and selecting a page no longer shifts its label; Tab still shows the high-contrast focus border.
 - Rust: a fixed bar under Appearance always shows the selected character, what is on the desktop, and its Apply button, instead of Apply sitting below the scrolled character grid.
 - Rust: the status message and the activity toggle share one row, leaving more room for page content.
 - Rust: the activity log keeps a running history of timed, readable lines (for example `09:06 · Integrity verified…`) instead of raw worker JSON; raw output is added only when a failure has no readable error.

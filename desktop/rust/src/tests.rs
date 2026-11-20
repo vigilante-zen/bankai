@@ -335,3 +335,29 @@ fn snapshot_restore_rolls_back_writes_and_deletions_after_a_late_failure() {
     assert!(portraits::save(&f.app, &obj! { "choice" => "random", "art" => "color" }).is_err());
     assert_eq!(fs::read_to_string(outside).unwrap(), "unchanged");
 }
+
+#[test]
+fn palette_reads_the_scheme_and_follows_the_accent_override(){
+    let f=Fixture::new();
+    write(&f.app.home.join(".local/share/color-schemes/BleachIchigo.colors"),
+        "[Colors:Window]\nBackgroundNormal=9,12,18\nForegroundNormal=232,237,245\n[Colors:View]\nBackgroundNormal=13,17,25\n[Colors:Button]\nBackgroundNormal=21,27,39\n[Colors:Selection]\nBackgroundNormal=82,50,26\n");
+    let palette=presets::palette(&f.app,"ichigo").unwrap();
+    let colors:Vec<(String,String)>=palette.get("colors").unwrap().array().unwrap().iter()
+        .map(|c|(c.get("label").unwrap().text().unwrap().into(),c.get("color").unwrap().text().unwrap().into())).collect();
+    assert_eq!(colors,vec![("Window".into(),"#090c12".into()),("Panels".into(),"#0d1119".into()),("Buttons".into(),"#151b27".into()),
+        ("Selection".into(),"#52321a".into()),("Text".into(),"#e8edf5".into()),("Accent".into(),"#ff9d52".into())]);
+    assert!(!palette.get("custom_accent").unwrap().boolean().unwrap());
+    let mut options=appearance::load(&f.app).unwrap();
+    if let Value::Object(map)=&mut options { map.insert("accent".into(),Value::from("#12ab34")); }
+    appearance::save(&f.app,&obj!{"appearance"=>options}).unwrap();
+    let after=presets::palette(&f.app,"ichigo").unwrap();
+    assert_eq!(after.get("accent").unwrap().text().unwrap(),"#12ab34");
+    assert!(after.get("custom_accent").unwrap().boolean().unwrap());
+    assert_eq!(after.get("colors").unwrap().array().unwrap().last().unwrap().get("color").unwrap().text().unwrap(),"#12ab34");
+    // Missing or malformed values are skipped, never guessed; a missing scheme is an error.
+    write(&f.app.home.join(".local/share/color-schemes/BleachRukia.colors"),"[Colors:Window]\nBackgroundNormal=1,2\n");
+    let partial=presets::palette(&f.app,"rukia").unwrap();
+    assert_eq!(partial.get("colors").unwrap().array().unwrap().len(),1);
+    fs::remove_file(f.app.home.join(".local/share/color-schemes/BleachRukia.colors")).unwrap();
+    assert!(presets::palette(&f.app,"rukia").is_err());
+}

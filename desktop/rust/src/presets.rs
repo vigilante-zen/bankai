@@ -80,6 +80,40 @@ where F: FnMut(&Path, &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Colors applying `name` would set: its KDE color scheme plus the accent (custom accent
+/// override included), read from the same files `apply` uses. Read-only.
+pub fn palette(app: &App, name: &str) -> Result<Value> {
+    let preset = app.preset(name)?;
+    let scheme_file = app.home.join(".local/share/color-schemes").join(format!("Bleach{}.colors", preset.get("title")?.text()?));
+    fsutil::reject_links(&scheme_file, &app.home)?;
+    if !scheme_file.is_file() { return Err(format!("Color scheme not installed: {}", scheme_file.display())); }
+    let source = fs::read_to_string(&scheme_file).text()?;
+    let mut section = "";
+    let mut values: BTreeMap<(String, String), String> = BTreeMap::new();
+    for line in source.lines() {
+        if line.starts_with('[') && line.ends_with(']') { section = &line[1..line.len()-1]; }
+        else if let Some((key, value)) = line.split_once('=') { values.insert((section.into(), key.trim().into()), value.trim().into()); }
+    }
+    let hex = |section: &str, key: &str| -> Option<String> {
+        let parts: Vec<u8> = values.get(&(section.into(), key.into()))?.split(',').map(|n| n.trim().parse().ok()).collect::<Option<_>>()?;
+        (parts.len() == 3).then(|| format!("#{:02x}{:02x}{:02x}", parts[0], parts[1], parts[2]))
+    };
+    let custom = crate::appearance::load(app)?.get("accent")?.text()?.to_string();
+    let accent = if custom.is_empty() { preset.get("accent")?.text()?.to_string() } else { custom.clone() };
+    let mut colors = vec![];
+    for (label, role, value) in [
+        ("Window", "Window backgrounds", hex("Colors:Window", "BackgroundNormal")),
+        ("Panels", "Lists, editors and terminal-style views", hex("Colors:View", "BackgroundNormal")),
+        ("Buttons", "Buttons and controls", hex("Colors:Button", "BackgroundNormal")),
+        ("Selection", "Selected items", hex("Colors:Selection", "BackgroundNormal")),
+        ("Text", "Main text", hex("Colors:Window", "ForegroundNormal")),
+        ("Accent", "Highlights, focus, terminal cursor, borders and tabs", Some(accent.clone())),
+    ] {
+        if let Some(value) = value { colors.push(obj! { "label" => label, "role" => role, "color" => value }); }
+    }
+    Ok(obj! { "preset" => name, "accent" => accent, "custom_accent" => !custom.is_empty(), "colors" => Value::from(colors) })
+}
+
 pub fn apply(app: &App, name: &str) -> Result<Value> {
     apply_with_expected_appearance(app, name, None)
 }

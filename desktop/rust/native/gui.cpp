@@ -160,7 +160,14 @@ public:
     setObjectName("appearance-artwork-preview");
     setAccessibleName("Appearance wallpaper preview");
     setMinimumHeight(200);
+    QSizePolicy policy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    policy.setHeightForWidth(true);
+    setSizePolicy(policy);
   }
+  // Wallpapers are wide (about 2.3:1); keep the preview in proportion, within limits.
+  bool hasHeightForWidth() const override { return true; }
+  int heightForWidth(int width) const override { return qBound(200, qRound(width / 2.4), 440); }
+  QSize sizeHint() const override { return QSize(760, heightForWidth(760)); }
   quint64 select(const QJsonObject &p) {
     preset = p;
     const auto generation = ++loadGeneration;
@@ -206,18 +213,19 @@ protected:
     painter.fillRect(rect(), QColor("#111925"));
     if (!image.isNull()) {
       if (previewSize != size()) {
-        const QSize artworkSize(qRound(width() * 0.42), qRound(height() * 0.84));
-        scaledPreview = image.scaled(artworkSize, Qt::KeepAspectRatio,
+        // Fill the whole panel, cropping evenly, like the wallpaper on a screen.
+        scaledPreview = image.scaled(size(), Qt::KeepAspectRatioByExpanding,
                                      Qt::SmoothTransformation);
         previewSize = size();
       }
       const auto &scaled = scaledPreview;
-      painter.drawPixmap(width() - scaled.width(),
+      painter.drawPixmap((width() - scaled.width()) / 2,
                          (height() - scaled.height()) / 2, scaled);
     }
-    QLinearGradient gradient(0, height() * .25, 0, height());
+    // A short fade at the bottom keeps the title readable without hiding the artwork.
+    QLinearGradient gradient(0, height() * .45, 0, height());
     gradient.setColorAt(0, QColor(9, 12, 18, 0));
-    gradient.setColorAt(1, QColor(9, 12, 18, 245));
+    gradient.setColorAt(1, QColor(9, 12, 18, 235));
     painter.fillRect(rect(), gradient);
     const QFont baseFont = qApp->font();
     if (!previewMessage.isEmpty()) {
@@ -253,17 +261,99 @@ protected:
                               qMax(2, qRound(2 * fontScale));
     const int eyebrowBaseline = titleBaseline - QFontMetrics(titleFont).height() -
                                 qMax(2, qRound(3 * fontScale));
-    painter.setPen(QColor(preset.value("accent").toString()));
-    painter.setFont(eyebrowFont);
-    painter.drawText(24, eyebrowBaseline,
-                     "SOUL SOCIETY / " +
-                         preset.value("title").toString().toUpper());
-    painter.setPen(Qt::white);
-    painter.setFont(titleFont);
-    painter.drawText(22, titleBaseline, preset.value("title").toString());
-    painter.setFont(detailFont);
-    painter.setPen(QColor("#bcc9da"));
-    painter.drawText(24, detailBaseline, preset.value("subtitle").toString());
+    // Text over artwork gets a soft dark shadow so it stays readable on bright scenes.
+    auto shadowed = [&painter](int x, int y, const QFont &font, const QColor &color,
+                               const QString &text) {
+      painter.setFont(font);
+      painter.setPen(QColor(0, 0, 0, 200));
+      for (const auto &offset : {QPoint(1, 1), QPoint(2, 2), QPoint(0, 1)})
+        painter.drawText(x + offset.x(), y + offset.y(), text);
+      painter.setPen(color);
+      painter.drawText(x, y, text);
+    };
+    shadowed(24, eyebrowBaseline, eyebrowFont, QColor("#e8edf5"),
+             "SOUL SOCIETY / " + preset.value("title").toString().toUpper());
+    shadowed(22, titleBaseline, titleFont, Qt::white, preset.value("title").toString());
+    shadowed(24, detailBaseline, detailFont, QColor("#d2dbea"), preset.value("subtitle").toString());
+  }
+};
+
+// The colors applying a character sets: one labelled chip per color.
+class PaletteStrip : public QWidget {
+public:
+  QJsonArray colors;
+  PaletteStrip() {
+    setObjectName("appearance-palette");
+    setAccessibleName("Color palette for the selected character");
+    setMinimumHeight(64);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+  }
+  void setColors(const QJsonArray &values) {
+    colors = values;
+    QStringList spoken;
+    for (auto value : colors) {
+      auto row = value.toObject();
+      spoken << row.value("label").toString() + " " + row.value("color").toString();
+    }
+    setAccessibleDescription(spoken.isEmpty() ? "Palette unavailable." : spoken.join(", ") + ".");
+    setToolTip(QString());
+    setHidden(colors.isEmpty());
+    update();
+  }
+  QSize sizeHint() const override {
+    return QSize(600, QFontMetrics(font()).height() * 2 + 40);
+  }
+
+protected:
+  bool event(QEvent *e) override {
+    if (e->type() == QEvent::ToolTip) {
+      auto *help = static_cast<QHelpEvent *>(e);
+      const int index = chipAt(help->pos());
+      if (index >= 0) {
+        auto row = colors[index].toObject();
+        QToolTip::showText(help->globalPos(), row.value("label").toString() + " · " +
+                                                  row.value("color").toString() + "\n" +
+                                                  row.value("role").toString(), this);
+      } else {
+        QToolTip::hideText();
+      }
+      return true;
+    }
+    return QWidget::event(e);
+  }
+  int chipAt(const QPoint &point) const {
+    if (colors.isEmpty()) return -1;
+    const int index = point.x() * colors.size() / qMax(1, width());
+    return index >= 0 && index < colors.size() ? index : -1;
+  }
+  void paintEvent(QPaintEvent *) override {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    const int count = colors.size();
+    if (!count) return;
+    const int gap = 8;
+    const qreal chipWidth = (width() - gap * (count - 1)) / qreal(count);
+    const QFontMetrics metrics(font());
+    const int swatchHeight = height() - metrics.height() * 2 - 8;
+    QFont small = font();
+    small.setPointSizeF(font().pointSizeF() * 0.85);
+    for (int i = 0; i < count; ++i) {
+      auto row = colors[i].toObject();
+      const QColor color(row.value("color").toString());
+      const QRectF chip(i * (chipWidth + gap), 0, chipWidth, swatchHeight);
+      painter.setPen(QPen(QColor("#33415a"), 1));
+      painter.setBrush(color);
+      painter.drawRoundedRect(chip.adjusted(.5, .5, -.5, -.5), 8, 8);
+      painter.setPen(QColor("#e8edf5"));
+      painter.setFont(font());
+      painter.drawText(QRectF(chip.left(), swatchHeight + 4, chipWidth, metrics.height()),
+                       Qt::AlignLeft | Qt::AlignVCenter,
+                       metrics.elidedText(row.value("label").toString(), Qt::ElideRight, int(chipWidth)));
+      painter.setPen(QColor("#9baabd"));
+      painter.setFont(small);
+      painter.drawText(QRectF(chip.left(), swatchHeight + 4 + metrics.height(), chipWidth, metrics.height()),
+                       Qt::AlignLeft | Qt::AlignVCenter, row.value("color").toString().toUpper());
+    }
   }
 };
 
@@ -281,6 +371,8 @@ public:
   QLabel *presetEmpty = nullptr;
   int presetColumns = 4;
   Artwork *art;
+  PaletteStrip *palette = nullptr;
+  QLabel *paletteTitle = nullptr;
   QLabel *saved, *previewNote, *storage, *snapshotDetails;
   QLabel *notice = nullptr;
   QLineEdit *snapshotSearch = nullptr;
@@ -471,6 +563,7 @@ public:
       if (row == 1) refreshSnapshots();
     });
     navigation->setCurrentRow(0);
+    keyboardOnlyFocus(this);
     for (int row = 0; row < navigation->count(); ++row) {
       auto key = QString("Ctrl+%1").arg(row + 1);
       auto *shortcut = new QShortcut(QKeySequence(key), this);
@@ -730,9 +823,32 @@ public:
     cards[id]->setChecked(true);
     auto p = preset(id);
     loadArtworkPreview(p, art->select(p));
+    updatePalette(id);
     previewNote->setText("Previewing " + p.value("title").toString() +
                          ". Applying saves a snapshot first.");
     updateApplyBar();
+  }
+  // Clicking a page, button or card should not leave a focus border behind; Tab still
+  // reaches every control and shows the high-contrast focus border.
+  static void keyboardOnlyFocus(QWidget *root) {
+    for (auto *widget : root->findChildren<QWidget *>())
+      if ((qobject_cast<QAbstractButton *>(widget) || qobject_cast<QListWidget *>(widget)) &&
+          widget->focusPolicy() == Qt::StrongFocus)
+        widget->setFocusPolicy(Qt::TabFocus);
+  }
+  void updatePalette(const QString &id) {
+    if (!palette)
+      return;
+    try {
+      auto result = rpc({{"op", "palette"}, {"preset", id}}).toObject();
+      palette->setColors(result.value("colors").toArray());
+      paletteTitle->setText(QString("COLOR PALETTE") +
+                            (result.value("custom_accent").toBool() ? " · YOUR ACCENT OVERRIDE" : ""));
+      paletteTitle->show();
+    } catch (const std::exception &) {
+      palette->setColors({});
+      paletteTitle->hide();
+    }
   }
   QString presetTitle(const QString &id) const {
     for (auto value : presets)
@@ -827,7 +943,11 @@ public:
               "Eighteen characters and forms with color and manga wallpapers.",
               "muted"));
     art = new Artwork;
-    layout->addWidget(art, 1);
+    layout->addWidget(art);
+    paletteTitle = label("", "eyebrow");
+    layout->addWidget(paletteTitle);
+    palette = new PaletteStrip;
+    layout->addWidget(palette);
     presetSearch = new QLineEdit;
     presetSearch->setObjectName("preset-search");
     presetSearch->setPlaceholderText("Search characters and forms…  ( / to focus )");
@@ -2922,6 +3042,22 @@ static int smoke(Window &window, const QString &directory) {
     if (window.applyButton->text() != "Apply " + window.presetTitle(other) ||
         !window.applyStatus->text().contains("on your desktop"))
       throw std::runtime_error("Apply bar does not show the selected and applied characters");
+    // The palette follows the selected character; the preview fills a proportional panel.
+    if (!window.palette->isVisible() || window.palette->colors.size() != 6 ||
+        window.palette->colors.last().toObject().value("label").toString() != "Accent" ||
+        window.palette->colors.last().toObject().value("color").toString() !=
+            window.preset(other).value("accent").toString().toLower())
+      throw std::runtime_error(QString("Color palette is missing or does not follow the selected character (visible=%1, chips=%2, accent=%3, expected=%4)")
+                                   .arg(window.palette->isVisible()).arg(window.palette->colors.size())
+                                   .arg(window.palette->colors.isEmpty() ? QString() : window.palette->colors.last().toObject().value("color").toString(),
+                                        window.preset(other).value("accent").toString()).toStdString());
+    if (window.art->height() < window.art->heightForWidth(window.art->width()) - 2 ||
+        window.art->height() < 250)
+      throw std::runtime_error("Wallpaper preview is not shown at a proportional size");
+    if (window.navigation->focusPolicy() != Qt::TabFocus ||
+        window.applyButton->focusPolicy() != Qt::TabFocus ||
+        window.presetSearch->focusPolicy() != Qt::StrongFocus)
+      throw std::runtime_error("Clicking navigation or buttons would leave a focus border");
     window.selectPreset(initial.toString());
     window.navigation->setCurrentRow(1);
     qApp->processEvents();
@@ -2981,6 +3117,16 @@ static int smoke(Window &window, const QString &directory) {
     throw std::runtime_error("Appearance picker has no useful empty-search state");
   presetSearch->clear();
   qApp->processEvents();
+  {
+    QElapsedTimer artworkWait;
+    artworkWait.start();
+    while (!window.art->previewReady && artworkWait.elapsed() < 10000) {
+      qApp->processEvents();
+      QThread::msleep(5);
+    }
+    if (!window.art->previewReady || window.art->image.isNull())
+      throw std::runtime_error("Wallpaper preview did not load");
+  }
   window.grab().save(directory + "/rust-appearance.png");
   auto appearanceBefore = rpc({{"op", "appearance"}});
   QString poolFailure;
@@ -3455,6 +3601,12 @@ static bool prepareSmokeHome(const QString &source, const QString &destination) 
       !copySmokeFile(source + "/.local/share/color-schemes/BleachTYBW.colors",
                      destination + "/.local/share/color-schemes/BleachTYBW.colors"))
     return false;
+  // Every character's scheme, so the palette strip can be checked for any selection.
+  const QDir schemes(source + "/.local/share/color-schemes");
+  for (const auto &name : schemes.entryList({"Bleach*.colors"}, QDir::Files))
+    if (name != "BleachTYBW.colors" &&
+        !copySmokeFile(schemes.filePath(name), destination + "/.local/share/color-schemes/" + name))
+      return false;
   const QString kittyConfig = destination + "/.config/kitty/kitty.conf";
   if (!QDir().mkpath(QFileInfo(kittyConfig).absolutePath()))
     return false;

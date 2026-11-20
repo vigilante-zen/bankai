@@ -8,9 +8,11 @@ QLabel#eyebrow { color: #e96b75; font-weight: 700; }
 QLabel#heading { font-weight: 700; }
 QLabel#muted { color: #9baabd; }
 QLabel#notice { background: #131e2b; color: #b8ccdf; padding: 12px; border-radius: 8px; }
-QListWidget { border: 0; background: transparent; }
-QListWidget::item { padding: 13px 8px; margin: 3px 0; border-radius: 7px; color: #acb9ca; }
-QListWidget::item:selected { background: #243044; color: white; border-left: 3px solid #e63946; }
+/* Every item reserves the 3px marker edge, so selecting one never shifts its text. */
+QListWidget { border: 0; background: transparent; outline: 0; }
+QListWidget::item { padding: 13px 8px; margin: 3px 0; border-radius: 7px; color: #acb9ca; border-left: 3px solid transparent; }
+QListWidget::item:hover:!selected { background: #182232; color: #e8edf5; }
+QListWidget::item:selected, QListWidget::item:selected:active, QListWidget::item:selected:!active { background: #243044; color: white; border-left: 3px solid #e63946; }
 QPushButton { background: #192332; border: 1px solid #2b3a50; padding: 10px 16px; border-radius: 7px; }
 QPushButton:hover { background: #253348; border-color: #617d9e; }
 QPushButton:disabled { color: #657080; background: #141a24; border-color: #202936; }

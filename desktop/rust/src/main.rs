@@ -68,6 +68,7 @@ impl App {
             "save-portraits" => portraits::save(self, request),
             "snapshots" => { let _lock = fsutil::Lock::acquire(&self.state)?; Ok(Value::from(snapshots::scan(self)?)) },
             "plan" => { let _lock = fsutil::Lock::acquire(&self.state)?; snapshots::plan(self,usize::try_from(request.get("keep")?.number()?).text()?) },
+            "palette" => presets::palette(self,request.get("preset")?.text()?),
             "apply" => presets::apply(self,request.get("preset")?.text()?),
             "backup" | "verify" | "inspect-snapshot" | "restore" | "protect" | "cleanup" => snapshots::locked_dispatch(self,op,request),
             "autostart" => {
