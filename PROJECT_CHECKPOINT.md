@@ -14,9 +14,8 @@ identifiers keep the old name on purpose so existing installs keep upgrading:
 and the `BLEACH KITTY` managed-block marker. The current Rust build is installed
 locally (2026-11-20) and its offscreen smoke test passed. The standalone
 `~/Projects/bankai-rust` folder is an obsolete October prototype, not this code.
-Open question: whether to retire the Python control center (`desktop/python`);
-the Python tooling (installers, `bankai-pick`, roster helper, login installer)
-stays either way.
+Decision (2026-11-20): keep the Python control center (`desktop/python`) as the
+alternative edition alongside Rust; do not propose retiring it again.
 
 ## Windows Terminal integration handoff (2026-10-22)
 
