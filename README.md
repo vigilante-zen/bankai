@@ -17,7 +17,7 @@ A character-driven Bleach theme for Kitty, Fish, Fastfetch and btop. Includes **
 | **[Install Rust →](desktop/rust/INSTALL.md)** | [Install Python →](desktop/python/INSTALL.md) |
 | [Rust source and details](desktop/rust/README.md) | [Python source and details](desktop/python/README.md) |
 
-[Download edition packages](https://github.com/vigilante-zen/bleach-kitty/releases) · [See app screenshots](desktop/README.md#screenshots)
+[Download edition packages](https://github.com/vigilante-zen/bankai/releases) · [See app screenshots](desktop/README.md#screenshots)
 
 Rust is the default desktop edition. Run `python3 desktop/install.py` from the repository root to install it; the Python edition remains available through its separate installer. Each edition has backups, launcher creation, updates and uninstall support. [Compare editions or switch later](desktop/README.md).
 

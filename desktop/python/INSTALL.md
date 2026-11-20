@@ -10,7 +10,7 @@ Both editions use the shared terminal theme, which requires Kitty, Fish, Fastfet
 
 ## 1. Download your edition
 
-Choose a package on the [GitHub Releases page](https://github.com/vigilante-zen/bleach-kitty/releases):
+Choose a package on the [GitHub Releases page](https://github.com/vigilante-zen/bankai/releases):
 
 - **`bankai-python.tar.gz`** — Python desktop source and shared terminal theme/artwork.
 
@@ -19,8 +19,8 @@ Release assets appear after a release is published and the packaging workflow pa
 Extract the archive and open its top-level directory, or clone:
 
 ```bash
-git clone https://github.com/vigilante-zen/bleach-kitty.git
-cd bleach-kitty
+git clone https://github.com/vigilante-zen/bankai.git
+cd bankai
 ```
 
 ## 2. Preview and install

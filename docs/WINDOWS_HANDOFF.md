@@ -1,15 +1,15 @@
 # Continue Bankai on another computer
 
 All Windows source, shared artwork and project notes are in
-https://github.com/vigilante-zen/bleach-kitty on branch `main`.
+https://github.com/vigilante-zen/bankai on branch `main`.
 
 ## Get the project
 
 Install Git, then open a terminal in the folder where you want the project:
 
 ```powershell
-git clone https://github.com/vigilante-zen/bleach-kitty.git
-cd bleach-kitty
+git clone https://github.com/vigilante-zen/bankai.git
+cd bankai
 ```
 
 If this computer already has a checkout, open that checkout and inspect

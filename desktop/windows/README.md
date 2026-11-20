@@ -9,7 +9,7 @@ to a selected Terminal profile, with independent settings backup and restore.
 ## Use the portable preview
 
 Download `bankai-windows-x64-preview` from a successful [Windows edition workflow
-run](https://github.com/vigilante-zen/bleach-kitty/actions/workflows/windows.yml).
+run](https://github.com/vigilante-zen/bankai/actions/workflows/windows.yml).
 Extract the artifact, then extract `bankai-windows-x64-preview.zip`. Open the
 `windows-preview` folder and run `Bankai.Windows.exe`. Keep all files together.
 The output includes its .NET and Windows App SDK runtimes.

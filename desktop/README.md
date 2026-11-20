@@ -41,7 +41,7 @@ Each install guide is self-contained. You do not need to install the other contr
 
 ## Downloads and installers
 
-[Choose a release download](https://github.com/vigilante-zen/bleach-kitty/releases). Python and Rust are packaged separately, each with the shared terminal theme and artwork. Assets appear after the release workflow succeeds. Run just your chosen installer from the package or repository root:
+[Choose a release download](https://github.com/vigilante-zen/bankai/releases). Python and Rust are packaged separately, each with the shared terminal theme and artwork. Assets appear after the release workflow succeeds. Run just your chosen installer from the package or repository root:
 
 ```bash
 python3 desktop/install.py         # Rust default; builds source if needed

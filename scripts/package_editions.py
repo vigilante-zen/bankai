@@ -40,7 +40,7 @@ This package contains the {edition.title()} desktop edition and its shared termi
 4. Launch {'`bankai-python`' if edition == 'python' else '`bankai`'}.
 
 [Full setup, update and uninstall instructions](desktop/{edition}/INSTALL.md).
-[Compare editions on GitHub](https://github.com/vigilante-zen/bleach-kitty/blob/main/desktop/README.md).
+[Compare editions on GitHub](https://github.com/vigilante-zen/bankai/blob/main/desktop/README.md).
 
 The Rust binary, when present, is dynamically linked and requires compatible Qt/system libraries.
 '''

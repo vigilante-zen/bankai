@@ -12,7 +12,7 @@ For a source installation, the installer runs `cargo build --release --locked`. 
 
 ## 1. Download your edition
 
-Choose a package on the [GitHub Releases page](https://github.com/vigilante-zen/bleach-kitty/releases):
+Choose a package on the [GitHub Releases page](https://github.com/vigilante-zen/bankai/releases):
 
 - **`bankai-rust-linux-x86-64.tar.gz`** — compiled Linux x86-64 app, Rust source and shared terminal theme/artwork.
 - **`bankai-rust-source.tar.gz`** — source build for other compatible Linux environments.
@@ -22,8 +22,8 @@ Release assets appear after a release is published and the packaging workflow pa
 Extract the archive and open its top-level directory, or clone:
 
 ```bash
-git clone https://github.com/vigilante-zen/bleach-kitty.git
-cd bleach-kitty
+git clone https://github.com/vigilante-zen/bankai.git
+cd bankai
 ```
 
 ## 2. Preview and install

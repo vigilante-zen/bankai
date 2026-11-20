@@ -2,6 +2,22 @@
 
 This file records a continuation point for the Bankai desktop project.
 
+## Release and rename (2026-11-20)
+
+Linux release `v2026.10.22` is published from tag `v2026.10.22` on `dcb7696`, the
+commit the October preflight tested:
+https://github.com/vigilante-zen/bankai/releases/tag/v2026.10.22 . The repository
+was renamed from `bleach-kitty` to `bankai`; GitHub redirects the old URLs, so older
+run links below still work. Docs and clone instructions use the new name. Installed
+identifiers keep the old name on purpose so existing installs keep upgrading:
+`~/.local/state/bleach-kitty-install`, `~/.config/fish/conf.d/bleach-kitty.fish`
+and the `BLEACH KITTY` managed-block marker. The current Rust build is installed
+locally (2026-11-20) and its offscreen smoke test passed. The standalone
+`~/Projects/bankai-rust` folder is an obsolete October prototype, not this code.
+Open question: whether to retire the Python control center (`desktop/python`);
+the Python tooling (installers, `bankai-pick`, roster helper, login installer)
+stays either way.
+
 ## Windows Terminal integration handoff (2026-10-22)
 
 Windows Terminal color integration is implemented and pushed through `23f601c`.

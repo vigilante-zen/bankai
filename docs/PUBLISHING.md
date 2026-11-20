@@ -6,7 +6,7 @@ Create an empty GitHub repository in your account, without adding a README or li
 git add .
 git commit -m "Package Bleach Kitty terminal theme"
 git branch -M main
-git remote add origin https://github.com/YOUR-USERNAME/bleach-kitty.git
+git remote add origin https://github.com/YOUR-USERNAME/bankai.git
 git push -u origin main
 ```
 
